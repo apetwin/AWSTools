@@ -20,30 +20,34 @@ async def deploy_document(profile, document_content, document_name, document_os,
     async with semaphore:
         session = aioboto3.Session(profile_name=profile)
         async with session.client('ssm') as ssm_client:
-        try:
-            await ssm_client.describe_document(Name=document_name)
-            # Update the existing document
-            response = await ssm_client.update_document(
-                Name=document_name,
-                Content=json.dumps(document_content),
-                DocumentVersion='$LATEST',
-                DocumentFormat='JSON',
-                # Removed Description parameter
-            )
-            print(f"Document {document_name} updated in {profile}.")
-        except ssm_client.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == 'InvalidDocument':
-                # Create the document if it does not exist
-                response = await ssm_client.create_document(
-                    Name=document_name,
-                    Content=json.dumps(document_content),
-                    DocumentType='Command',
-                    DocumentFormat='JSON',
-                    # Removed Description parameter
-                )
-                print(f"Document {document_name} created in {profile}.")
-            else:
-                raise
+            try:
+                os_description = " (Windows)" if document_os == "win" else " (Linux)" if document_os == "lin" else ""
+                full_description = document_content.get('description', '') + os_description
+
+                try:
+                    await ssm_client.describe_document(Name=document_name)
+                    # Update the existing document
+                    response = await ssm_client.update_document(
+                        Name=document_name,
+                        Content=json.dumps(document_content),
+                        DocumentVersion='$LATEST',
+                        DocumentFormat='JSON',
+                        # Removed Description parameter
+                    )
+                    print(f"Document {document_name} updated in {profile}.")
+                except ssm_client.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'InvalidDocument':
+                        # Create the document if it does not exist
+                        response = await ssm_client.create_document(
+                            Name=document_name,
+                            Content=json.dumps(document_content),
+                            DocumentType='Command',
+                            DocumentFormat='JSON',
+                            # Removed Description parameter
+                        )
+                        print(f"Document {document_name} created in {profile}.")
+                    else:
+                        raise
 
             except Exception as e:
                 print(f"Error processing document in {profile}: {e}")
