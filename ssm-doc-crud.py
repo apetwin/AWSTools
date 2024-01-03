@@ -21,14 +21,11 @@ async def deploy_document(profile, document_content, document_name, document_os,
         session = aioboto3.Session(profile_name=profile)
         async with session.client('ssm') as ssm_client:
             try:
-                # Modify the document's description to include the OS type
                 os_description = " (Windows)" if document_os == "win" else " (Linux)" if document_os == "lin" else ""
                 full_description = document_content.get('description', '') + os_description
 
                 try:
-                    # Check if the document already exists
                     await ssm_client.describe_document(Name=document_name)
-                    # If it exists, update the document
                     response = await ssm_client.update_document(
                         Name=document_name,
                         Content=json.dumps(document_content),
@@ -37,16 +34,18 @@ async def deploy_document(profile, document_content, document_name, document_os,
                         Description=full_description
                     )
                     print(f"Document {document_name} updated in {profile}.")
-                except ssm_client.exceptions.ResourceNotFoundException:
-                    # If the document does not exist, create it
-                    response = await ssm_client.create_document(
-                        Name=document_name,
-                        Content=json.dumps(document_content),
-                        DocumentType='Command',
-                        DocumentFormat='JSON',
-                        Description=full_description
-                    )
-                    print(f"Document {document_name} created in {profile}.")
+                except ssm_client.exceptions.ClientError as e:
+                    if e.response['Error']['Code'] == 'InvalidDocument':
+                        response = await ssm_client.create_document(
+                            Name=document_name,
+                            Content=json.dumps(document_content),
+                            DocumentType='Command',
+                            DocumentFormat='JSON',
+                            Description=full_description
+                        )
+                        print(f"Document {document_name} created in {profile}.")
+                    else:
+                        raise
 
             except Exception as e:
                 print(f"Error processing document in {profile}: {e}")
